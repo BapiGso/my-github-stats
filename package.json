@@ -1,0 +1,13 @@
+{
+    "name": "custom-github-stats",
+    "version": "1.0.0",
+    "description": "Custom GitHub Stats with decorations",
+    "main": "api/stats.js",
+    "scripts": {
+    "dev": "vercel dev"
+},
+    "dependencies": {},
+    "devDependencies": {
+    "vercel": "^33.0.0"
+}
+}
