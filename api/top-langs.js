@@ -37,7 +37,7 @@ export default async function handler(req, res) {
             ? ''
             : getDecorationSvg(decoration, decoration_x, decoration_y);
 
-        // 创建增强版 SVG
+        // 创建增强版 SVG - 使用 <g> 标签嵌入内容
         const enhancedSvg = `
 <svg width="${svg_width}" height="${svg_height}" xmlns="http://www.w3.org/2000/svg">
   <rect
@@ -50,7 +50,9 @@ export default async function handler(req, res) {
     stroke="#e4e2e2"
     stroke-opacity="1"
   />
-  <image href="https://github-readme-stats.vercel.app/api/top-langs/?${new URLSearchParams(langsParams).toString()}"/>
+  <g>
+    ${extractSvgContent(originalSvg)}
+  </g>
   ${decorationSvg}
 </svg>`.trim();
 
