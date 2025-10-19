@@ -4,11 +4,11 @@ export default async function handler(req, res) {
     try {
         const {
             username,
-            decoration = 'cloud',
+            decoration = 'cat',
             decoration_x,
             decoration_y,
             svg_width = '500',
-            svg_height = '200',
+            svg_height = '170',
             ...otherParams
         } = req.query;
 
@@ -17,19 +17,19 @@ export default async function handler(req, res) {
         }
 
         // 构建参数
-        const statsParams = {
+        const langsParams = {
             username,
-            show_icons: otherParams.show_icons || 'true',
-            hide_rank: otherParams.hide_rank || 'true',
-            hide_border: otherParams.hide_border || 'true',
+            layout: otherParams.layout || 'compact',
             card_width: otherParams.card_width || '350',
+            hide_border: otherParams.hide_border || 'true',
+            show_bg: otherParams.show_bg || '1',
             ...otherParams
         };
 
         // 获取原始 SVG
         const originalSvg = await fetchGithubStats(
-            'https://github-readme-stats.vercel.app/api',
-            statsParams
+            'https://github-readme-stats.vercel.app/api/top-langs/',
+            langsParams
         );
 
         // 获取装饰
@@ -44,15 +44,13 @@ export default async function handler(req, res) {
     x="0.5"
     y="0.5"
     rx="4.5"
-    height="98%"
+    height="99%"
     width="${parseInt(svg_width) - 1}"
     fill="#fffefe"
     stroke="#e4e2e2"
     stroke-opacity="1"
   />
-  <g>
-    ${extractSvgContent(originalSvg)}
-  </g>
+  <image href="https://github-readme-stats.vercel.app/api/top-langs/?${new URLSearchParams(langsParams).toString()}"/>
   ${decorationSvg}
 </svg>`.trim();
 
