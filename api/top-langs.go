@@ -8,25 +8,26 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/labstack/echo/v4"
 )
 
-func topLangsHandler(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	username := strings.TrimSpace(q.Get("username"))
+func topLangsEchoHandler(c echo.Context) error {
+	q := c.QueryParams()
+	username := strings.TrimSpace(c.QueryParam("username"))
 	if username == "" {
-		http.Error(w, `{"error":"Username is required"}`, http.StatusBadRequest)
-		return
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Username is required"})
 	}
 
 	// Defaults for outer SVG size
 	svgWidth := 500
 	svgHeight := 170
-	if v := q.Get("svg_width"); v != "" {
+	if v := c.QueryParam("svg_width"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			svgWidth = n
 		}
 	}
-	if v := q.Get("svg_height"); v != "" {
+	if v := c.QueryParam("svg_height"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			svgHeight = n
 		}
@@ -50,14 +51,13 @@ func topLangsHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch upstream top-langs SVG
 	orig, err := fetchUpstream("https://github-readme-stats.vercel.app/api/top-langs/", upstreamQ)
 	if err != nil {
-		http.Error(w, `{"error":"Failed to fetch upstream"}`, http.StatusBadGateway)
-		return
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "Failed to fetch upstream"})
 	}
 
 	leftContent := extractSVGContent(orig)
 
 	// Load role asset if provided
-	role := sanitizeRole(q.Get("role"))
+	role := sanitizeRole(c.QueryParam("role"))
 	assetContent := ""
 	if role != "" {
 		assetsDir := getAssetsDir()
@@ -73,12 +73,12 @@ func topLangsHandler(w http.ResponseWriter, r *http.Request) {
 
 	assetX := 360
 	assetY := 0
-	if v := q.Get("role_x"); v != "" {
+	if v := c.QueryParam("role_x"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			assetX = n
 		}
 	}
-	if v := q.Get("role_y"); v != "" {
+	if v := c.QueryParam("role_y"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			assetY = n
 		}
@@ -108,11 +108,10 @@ func topLangsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	sb.WriteString(`\n</svg>`)
 
-	writeSVGHeaders(w)
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(sb.String()))
+	writeSVGHeadersEcho(c)
+	return c.Blob(http.StatusOK, "image/svg+xml", []byte(sb.String()))
 }
 
-func init() {
-	http.HandleFunc("/api/top-langs", topLangsHandler)
+func registerTopLangs(e *echo.Echo) {
+	e.GET("/api/top-langs", topLangsEchoHandler)
 }

@@ -9,11 +9,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/labstack/echo/v4"
 )
 
 // extractSVGContent returns inner content of the first <svg>...</svg>
 func extractSVGContent(svg string) string {
-	// Fast path using string indexes
 	startTagIdx := strings.Index(strings.ToLower(svg), "<svg")
 	if startTagIdx == -1 {
 		return svg
@@ -43,7 +44,6 @@ func getAssetsDir() string {
 	if v := os.Getenv("ASSETS_DIR"); v != "" {
 		return v
 	}
-	// default to ./assets relative to working directory
 	return "assets"
 }
 
@@ -62,29 +62,29 @@ func fetchUpstream(base string, q url.Values) (string, error) {
 	return string(b), nil
 }
 
-func writeSVGHeaders(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "image/svg+xml")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "s-maxage=3600, stale-while-revalidate")
+func writeSVGHeadersEcho(c echo.Context) {
+	h := c.Response().Header()
+	h.Set("Content-Type", "image/svg+xml")
+	h.Set("Access-Control-Allow-Origin", "*")
+	h.Set("Cache-Control", "s-maxage=3600, stale-while-revalidate")
 }
 
-func statsHandler(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	username := strings.TrimSpace(q.Get("username"))
+func statsEchoHandler(c echo.Context) error {
+	q := c.QueryParams()
+	username := strings.TrimSpace(c.QueryParam("username"))
 	if username == "" {
-		http.Error(w, `{"error":"Username is required"}`, http.StatusBadRequest)
-		return
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Username is required"})
 	}
 
 	// Defaults for outer SVG size
 	svgWidth := 500
 	svgHeight := 200
-	if v := q.Get("svg_width"); v != "" {
+	if v := c.QueryParam("svg_width"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			svgWidth = n
 		}
 	}
-	if v := q.Get("svg_height"); v != "" {
+	if v := c.QueryParam("svg_height"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			svgHeight = n
 		}
@@ -100,20 +100,17 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 			upstreamQ.Add(key, v)
 		}
 	}
-	// Ensure username is set
 	upstreamQ.Set("username", username)
 
 	// Fetch upstream stats SVG
 	orig, err := fetchUpstream("https://github-readme-stats.vercel.app/api", upstreamQ)
 	if err != nil {
-		http.Error(w, `{"error":"Failed to fetch upstream"}`, http.StatusBadGateway)
-		return
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "Failed to fetch upstream"})
 	}
-
 	leftContent := extractSVGContent(orig)
 
 	// Load role asset if provided
-	role := sanitizeRole(q.Get("role"))
+	role := sanitizeRole(c.QueryParam("role"))
 	assetContent := ""
 	if role != "" {
 		assetsDir := getAssetsDir()
@@ -130,12 +127,12 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 	// Place asset on the right side with a default offset
 	assetX := 360
 	assetY := 0
-	if v := q.Get("role_x"); v != "" {
+	if v := c.QueryParam("role_x"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			assetX = n
 		}
 	}
-	if v := q.Get("role_y"); v != "" {
+	if v := c.QueryParam("role_y"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			assetY = n
 		}
@@ -166,21 +163,10 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	sb.WriteString(`\n</svg>`)
 
-	writeSVGHeaders(w)
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(sb.String()))
+	writeSVGHeadersEcho(c)
+	return c.Blob(http.StatusOK, "image/svg+xml", []byte(sb.String()))
 }
 
-func main() {
-	http.HandleFunc("/api/stats", statsHandler)
-	// For local dev: allow running `go run api/stats.go` to serve this one endpoint
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3000"
-	}
-	// If running on Vercel, the platform will route requests directly to the handler.
-	// Running a local server here won't affect Vercel, but helps for local testing.
-	if os.Getenv("GO_LOCAL_SERVER") == "1" {
-		_ = http.ListenAndServe(":"+port, nil)
-	}
+func registerStats(e *echo.Echo) {
+	e.GET("/api/stats", statsEchoHandler)
 }
